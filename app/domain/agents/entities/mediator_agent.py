@@ -1,30 +1,46 @@
+"""Mediator agent for orchestrating political agent responses."""
+
 from langchain_core.prompts import ChatPromptTemplate
-from app.domain.agents.entities.agent import BaseAgent
 from langchain_core.output_parsers import PydanticOutputParser
-from app.domain.agents.entities.liberal_agent import LiberalAgent
+from langchain_openai import ChatOpenAI
 from app.domain.agents.responses.mediator_response import MediatorResponse
-from app.domain.agents.entities.conservative_agent import ConservativeAgent
-from app.domain.agents.entities.socialist_agent import SocialistAgent
 
-class MediatorAgent(BaseAgent):
+
+class MediatorAgent:
+    """Mediator agent that determines which agents to invoke and synthesizes responses."""
+    
     def __init__(self):
-        super().__init__(name="Mediator", model_name="gpt-4o", system_prompt='You are a neutral mediator deciding which agents to invoke.')
-
-    def construct_user_query(self, user_query):
-        return f"""
+        self.name = "Mediator"
+        self.llm = ChatOpenAI(model="gpt-4o", max_tokens=200)
+    
+    def execute(self, user_query: str) -> str:
+        """Determine which agents should respond to the query."""
+        from langchain.schema import SystemMessage, HumanMessage
+        
+        system_prompt = 'You are a neutral mediator deciding which agents to invoke.'
+        user_message = f"""
         You are a mediator. Determine which agents should respond to the query.
-        Agents: {list(self.get_available_agents())}
+        Available agents: ["conservative", "liberal", "socialist"]
         Return a JSON object like:
-        {{ "agents_to_invoke": ["liberal", "conservative"] }}
+        {{ "agents_to_invoke": ["liberal", "conservative", "socialist"] }}
         User query: {user_query}
         """
+        
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_message)
+        ]
+        
+        response = self.llm.invoke(messages)
+        return response.content
     
     def get_available_agents(self):
-        return {
-            "conservative": ConservativeAgent(),
-            "liberal": LiberalAgent(),
-            "socialist": SocialistAgent()
-        }
+        """Get available agents using factory pattern."""
+        # Import here to avoid circular dependency
+        from app.domain.agents.factories.agent_factory import AgentFactory, get_global_registry
+        
+        factory = AgentFactory(get_global_registry())
+        return factory.create_batch(["conservative", "liberal", "socialist"])
     
     def get_synthesize_prompt(self):
         parser = PydanticOutputParser(pydantic_object=MediatorResponse)
