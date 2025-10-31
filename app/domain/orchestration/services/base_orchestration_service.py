@@ -108,8 +108,24 @@ class OrchestratorAsync:
 
         sub_agent_responses = await asyncio.gather(*tasks)
         
+        # Filter out errors and format responses
+        valid_responses = []
+        for resp in sub_agent_responses:
+            if isinstance(resp, dict):
+                if 'error' in resp:
+                    logger.warning(f"[{trace_id}] Skipping error response: {resp['error']}")
+                    continue
+                if 'party' in resp and 'content' in resp:
+                    valid_responses.append(resp)
+                else:
+                    logger.warning(f"[{trace_id}] Response missing party or content: {resp}")
+        
+        if not valid_responses:
+            logger.error(f"[{trace_id}] No valid agent responses received")
+            raise ValueError("No valid responses from political agents")
+        
         sub_agent_text = "\n\n".join(
-            [f"{resp['party']}: {resp['content']}" for resp in sub_agent_responses]
+            [f"{resp['party']}: {resp['content']}" for resp in valid_responses]
         )
 
         ##logger.info(f"sub_agent_respones {sub_agent_text}")
@@ -122,8 +138,8 @@ class OrchestratorAsync:
             "sub_agent_responses": sub_agent_text
         }
 
-        # Extract actual parties that responded
-        actual_parties = [resp['party'] for resp in sub_agent_responses if 'party' in resp]
+        # Extract actual parties that responded (from valid responses only)
+        actual_parties = [resp['party'] for resp in valid_responses]
         logger.info(f"[{trace_id}] Actual parties that responded: {actual_parties}")
         
         chain = prompt | self.orchestration_agent.llm | parser
