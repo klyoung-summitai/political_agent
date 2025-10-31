@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+streamlit
+langchain
+asyncio
+typing
+loguru
+langchain-openai
+prometheus_client
+dotenv
